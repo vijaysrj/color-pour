@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Color Pour</title>
+<meta name="description" content="A water color sort puzzle with hard levels.">
+<meta name="theme-color" content="#14112b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Color Pour">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+:root {
+  --bg1: #1d1840; --bg2: #0d0b1f; --ink: #f4f1ff; --muted: #a9a3cc;
+  --glass: rgba(255,255,255,.10); --glass-edge: rgba(255,255,255,.35);
+  --accent: #ffcf5a; --panel: rgba(30,26,64,.92);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; overscroll-behavior: none; }
+body {
+  background: radial-gradient(120% 80% at 50% 0%, var(--bg1), var(--bg2));
+  background-color: var(--bg2);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "Segoe UI", Roboto, sans-serif;
+  user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  overflow: hidden;
+}
+#app { position: fixed; inset: 0; display: flex; flex-direction: column;
+  padding: calc(env(safe-area-inset-top) + 8px) 16px calc(env(safe-area-inset-bottom) + 12px); }
+header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.title { text-align: center; flex: 1; }
+.title h1 { margin: 0; font-size: 20px; letter-spacing: .5px; }
+.tags { display: flex; gap: 6px; justify-content: center; margin-top: 4px; flex-wrap: wrap; min-height: 20px; }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: rgba(255,255,255,.12); color: var(--muted); }
+.tag.hot { background: rgba(255,120,90,.22); color: #ffb3a1; }
+.iconbtn { width: 44px; height: 44px; border-radius: 14px; border: 0; background: var(--glass);
+  color: var(--ink); font-size: 20px; display: grid; place-items: center; cursor: pointer; }
+.iconbtn:active { transform: scale(.94); }
+.stats { display: flex; justify-content: center; gap: 18px; color: var(--muted); font-size: 14px; margin: 6px 0 0; }
+.stats b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.stats .warn b { color: #ff8f7a; }
+#board { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 22px; position: relative; }
+.row { display: flex; justify-content: center; }
+.tube { position: relative; margin: 0 var(--gap); cursor: pointer; transition: transform .18s ease; will-change: transform; }
+.tube .glass { position: absolute; inset: 0; border: 2px solid var(--glass-edge); border-top: 0;
+  border-radius: 0 0 calc(var(--w) * .5) calc(var(--w) * .5); background: var(--glass); overflow: hidden;
+  box-shadow: inset 4px 0 8px rgba(255,255,255,.08); }
+.tube .glass::after { content: ""; position: absolute; left: 18%; top: 6%; width: 12%; height: 70%;
+  border-radius: 99px; background: rgba(255,255,255,.18); pointer-events: none; }
+.tube .rim { position: absolute; left: -4px; right: -4px; top: -3px; height: 6px; border-radius: 6px; background: var(--glass-edge); }
+.tube.lift { transform: translateY(-18px); }
+.tube.lift .rim { background: var(--accent); }
+.tube.hint .rim { background: #7cf0b0; box-shadow: 0 0 12px #7cf0b0; }
+.tube.hintTo .glass { box-shadow: 0 0 14px #7cf0b0; }
+.tube.done .rim { background: #fff; box-shadow: 0 0 10px rgba(255,255,255,.7); }
+.tube.shake { animation: shake .3s; }
+@keyframes shake { 25%{translate:-5px} 50%{translate:5px} 75%{translate:-3px} }
+.seg { position: absolute; left: 0; right: 0; display: grid; place-items: center; font-size: calc(var(--w) * .38);
+  color: rgba(0,0,0,.45); transition: bottom .2s, height .2s; }
+.seg.hidden { background: repeating-linear-gradient(135deg, #2c2752 0 6px, #373163 6px 12px) !important; color: rgba(255,255,255,.55); font-weight: 700; }
+.seg.reveal { animation: reveal .45s ease; }
+@keyframes reveal { from { filter: brightness(2.2) saturate(.2); } to { filter: none; } }
+footer { display: flex; justify-content: center; gap: 10px; }
+.tool { flex: 1; max-width: 92px; border: 0; border-radius: 16px; padding: 10px 4px 8px; background: var(--glass); color: var(--ink);
+  font-size: 22px; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; }
+.tool small { font-size: 11px; color: var(--muted); }
+.tool:disabled { opacity: .35; }
+.tool:active:not(:disabled) { transform: scale(.95); }
+.overlay { position: fixed; inset: 0; background: rgba(5,4,15,.66); display: none; align-items: center; justify-content: center;
+  padding: 16px; z-index: 10; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.overlay.show { display: flex; }
+.card { background: var(--panel); border: 1px solid rgba(255,255,255,.12); border-radius: 24px; padding: 22px 20px; width: 100%; max-width: 380px;
+  max-height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow: auto; text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.card h2 { margin: 4px 0 8px; }
+.card p { color: var(--muted); margin: 6px 0 14px; line-height: 1.45; }
+.stars { color: var(--accent); font-size: 40px; letter-spacing: 6px; margin: 6px 0; }
+.stars .off { opacity: .2; }
+.btn { display: block; width: 100%; border: 0; border-radius: 14px; padding: 14px; font-size: 16px; font-weight: 600; margin-top: 10px;
+  background: var(--accent); color: #2a1d00; cursor: pointer; }
+.btn.ghost { background: rgba(255,255,255,.1); color: var(--ink); }
+.setting { display: flex; justify-content: space-between; align-items: center; padding: 12px 2px; border-bottom: 1px solid rgba(255,255,255,.08); text-align: left; gap: 12px; }
+.setting span small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.switch { width: 50px; height: 30px; border-radius: 99px; background: rgba(255,255,255,.2); position: relative; flex: none; border: 0; cursor: pointer; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: left .18s; }
+.switch.on { background: #4cd964; }
+.switch.on::after { left: 23px; }
+.grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 10px 0; }
+.lvl { aspect-ratio: 1; border-radius: 12px; border: 0; background: rgba(255,255,255,.1); color: var(--ink); font-weight: 600; font-size: 15px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.lvl small { font-size: 9px; color: var(--accent); letter-spacing: 1px; }
+.lvl.cur { outline: 2px solid var(--accent); }
+.lvl:disabled { opacity: .3; }
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 96px); transform: translateX(-50%) translateY(20px); opacity: 0;
+  background: rgba(0,0,0,.75); padding: 10px 16px; border-radius: 99px; font-size: 14px; transition: .25s; pointer-events: none; z-index: 20; white-space: nowrap; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.loading { color: var(--muted); font-size: 15px; }
+canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button class="iconbtn" id="btnMenu" aria-label="Levels">☰</button>
+    <div class="title">
+      <h1 id="lvlTitle">Level 1</h1>
+      <div class="tags" id="tags"></div>
+    </div>
+    <button class="iconbtn" id="btnSettings" aria-label="Settings">⚙︎</button>
+  </header>
+  <div class="stats">
+    <span id="statMoves">Moves <b>0</b></span>
+    <span id="statPar">Par <b>–</b></span>
+    <span id="statUndo">Undos <b>∞</b></span>
+  </div>
+  <div id="board"><div class="loading">Mixing colors…</div></div>
+  <footer>
+    <button class="tool" id="btnUndo">↶<small>Undo</small></button>
+    <button class="tool" id="btnRestart">⟲<small>Restart</small></button>
+    <button class="tool" id="btnHint">💡<small id="hintLbl">Hint</small></button>
+    <button class="tool" id="btnTube">＋<small>Tube</small></button>
+  </footer>
+</div>
+
+<div class="overlay" id="ovWin"><div class="card">
+  <div style="font-size:15px;color:var(--muted)" id="winSub">Level complete</div>
+  <h2 id="winTitle">Beautiful!</h2>
+  <div class="stars" id="winStars"></div>
+  <p id="winText"></p>
+  <button class="btn" id="btnNext">Next level</button>
+  <button class="btn ghost" id="btnReplay">Replay for more stars</button>
+</div></div>
+
+<div class="overlay" id="ovLose"><div class="card">
+  <h2>Out of moves</h2>
+  <p>This one has a move limit. Try a cleaner route.</p>
+  <button class="btn" id="btnRetry">Try again</button>
+  <button class="btn ghost" id="btnLoseUndo">Undo last move</button>
+</div></div>
+
+<div class="overlay" id="ovLevels"><div class="card">
+  <h2>Levels</h2>
+  <button class="btn" id="btnDaily">☀︎ Daily challenge</button>
+  <div class="grid" id="lvlGrid"></div>
+  <div style="display:flex;gap:8px">
+    <button class="btn ghost" id="pgPrev">‹</button>
+    <button class="btn ghost" id="pgNext">›</button>
+  </div>
+  <button class="btn ghost" data-close>Close</button>
+</div></div>
+
+<div class="overlay" id="ovSettings"><div class="card">
+  <h2>Settings</h2>
+  <div class="setting"><span>Sound</span><button class="switch" data-set="sound"></button></div>
+  <div class="setting"><span>Color symbols<small>Adds a shape to each color so similar shades are easy to tell apart.</small></span><button class="switch" data-set="symbols"></button></div>
+  <div class="setting"><span>Expert mode<small>Every level gets hidden layers, no hints and no extra tube.</small></span><button class="switch" data-set="expert"></button></div>
+  <div class="setting"><span>Quick pour<small>Shorter pour animation.</small></span><button class="switch" data-set="fast"></button></div>
+  <p style="font-size:13px;margin-top:16px">To install: open in Safari, tap Share, then “Add to Home Screen”.</p>
+  <button class="btn ghost" id="btnHow">How to play</button>
+  <button class="btn ghost" id="btnReset">Reset progress</button>
+  <button class="btn" data-close>Done</button>
+</div></div>
+
+<div class="overlay" id="ovHow"><div class="card" style="text-align:left">
+  <h2 style="text-align:center">How to play</h2>
+  <p>Tap a tube, then tap another to pour. You can pour onto the same color or into an empty tube, as long as there is room.</p>
+  <p>Finish when every tube holds a single color.</p>
+  <p><b style="color:var(--ink)">Mystery</b> levels hide the layers under the top one. They are revealed as you uncover them.</p>
+  <p><b style="color:var(--ink)">Tight</b> levels give you only one spare tube. <b style="color:var(--ink)">Limited</b> levels cap your moves. Later levels also limit undos.</p>
+  <p>Every level is checked to be solvable. Beat par for 3 stars.</p>
+  <button class="btn" data-close>Got it</button>
+</div></div>
+
+<div class="toast" id="toast"></div>
+<canvas id="confetti"></canvas>
+
+<script src="core.js"></script>
+<script>
+(() => {
+'use strict';
+const COLORS = ['#ef4444','#f97316','#facc15','#a3e635','#16a34a','#14b8a6','#67e8f9','#3b82f6','#3730a3','#a855f7','#f472b6','#92400e','#9ca3af','#fff1c1'];
+const SYMBOLS = ['●','▲','■','◆','★','✚','♥','♠','♣','☾','✿','⬟','✦','⬢'];
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('cp_' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('cp_' + k, JSON.stringify(v)); } catch {} },
+};
+const settings = Object.assign({ sound: true, symbols: false, expert: false, fast: false }, store.get('settings', {}));
+let progress = Object.assign({ unlocked: 1, stars: {}, daily: {} }, store.get('progress', {}));
+let G = null; // current game
+let sel = -1, busy = false, levelPage = 0;
+
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+
+// ---------- audio ----------
+let ac = null;
+function tone(freq, dur = .12, type = 'sine', vol = .08, when = 0) {
+  if (!settings.sound) return;
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const t = ac.currentTime + when, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
+  } catch {}
+}
+const sfx = {
+  pick: () => tone(520, .07, 'triangle', .05),
+  pour: () => { for (let i = 0; i < 4; i++) tone(300 + Math.random() * 300, .09, 'sine', .04, i * .05); },
+  bad: () => tone(140, .15, 'square', .03),
+  done: () => { tone(660, .12, 'triangle', .06); tone(990, .18, 'triangle', .05, .08); },
+  win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, .25, 'triangle', .07, i * .11)),
+};
+
+// ---------- game setup ----------
+function startLevel(id, resume) {
+  sel = -1; busy = false;
+  $('board').innerHTML = '<div class="loading">Mixing colors…</div>';
+  setTimeout(() => {
+    const saved = resume ? store.get('current', null) : null;
+    if (saved && saved.id === id && (id !== 'daily' || saved.date === today())) { G = saved; render(); return; }
+    const daily = id === 'daily';
+    const cfg = daily ? Core.dailyConfig(today()) : Core.levelConfig(id);
+    if (settings.expert) { cfg.hidden = true; }
+    const gen = Core.generate(cfg, daily ? cfg.seedBase : undefined);
+    G = {
+      id, date: daily ? today() : null, cap: gen.capacity, colors: cfg.colors, tubes: gen.tubes, par: gen.par,
+      initial: gen.tubes.map((t) => t.slice()),
+      hidden: cfg.hidden, moveLimit: cfg.moveLimit ? Math.ceil(gen.par * 1.15) : 0,
+      undoLimit: cfg.undoLimit === Infinity ? -1 : cfg.undoLimit, undosUsed: 0,
+      tight: gen.empties === 1, moves: 0, history: [], hints: settings.expert ? 0 : 3,
+      extraUsed: settings.expert, assisted: false, won: false,
+      revealed: gen.tubes.map((t) => t.map((_, i) => !cfg.hidden || i === t.length - 1)),
+    };
+    save(); render();
+  }, 30);
+}
+function save() { store.set('current', G); store.set('progress', progress); }
+
+// ---------- layout & render ----------
+function layout() {
+  const n = G.tubes.length, cap = G.cap;
+  const board = $('board'), bw = board.clientWidth, bh = board.clientHeight;
+  let best = null;
+  for (let rows = 1; rows <= 4; rows++) {
+    const per = Math.ceil(n / rows);
+    let w = Math.min(60, (bw - 4) / per / 1.38);
+    const gap = w * .19;
+    const segH = w * .92;
+    let h = segH * cap + w * .35;
+    const totalH = rows * (h + 18) + (rows - 1) * 22 + 20;
+    if (totalH > bh) { const s = bh / totalH; w *= s; h *= s; }
+    if (!best || w > best.w) best = { rows, per, w, gap: w * .19, segH: (h - w * .35) / cap, h };
+  }
+  return best;
+}
+
+function render() {
+  if (!G) return;
+  const L = layout();
+  const board = $('board');
+  board.innerHTML = '';
+  board.style.setProperty('--w', L.w + 'px');
+  board.style.setProperty('--gap', L.gap + 'px');
+  let idx = 0;
+  for (let r = 0; r < L.rows && idx < G.tubes.length; r++) {
+    const row = document.createElement('div'); row.className = 'row';
+    const remaining = G.tubes.length - idx, rowsLeft = L.rows - r;
+    const count = Math.ceil(remaining / rowsLeft);
+    for (let k = 0; k < count; k++, idx++) row.appendChild(tubeEl(idx, L));
+    board.appendChild(row);
+  }
+  updateHud();
+}
+
+function tubeEl(i, L) {
+  const t = G.tubes[i];
+  const el = document.createElement('div');
+  el.className = 'tube' + (i === sel ? ' lift' : '') + (Core.isComplete(t, G.cap) ? ' done' : '');
+  el.style.width = L.w + 'px'; el.style.height = L.h + 'px'; el.dataset.i = i;
+  const glass = document.createElement('div'); glass.className = 'glass';
+  const rim = document.createElement('div'); rim.className = 'rim';
+  for (let j = 0; j < t.length; j++) {
+    const s = document.createElement('div');
+    const hidden = !G.revealed[i][j];
+    s.className = 'seg' + (hidden ? ' hidden' : '') + (G.justRevealed && G.justRevealed[i] === j ? ' reveal' : '');
+    s.style.height = (L.segH + .5) + 'px';
+    s.style.bottom = (j * L.segH) + 'px';
+    const c = COLORS[t[j]];
+    if (!hidden) s.style.background = `linear-gradient(90deg, ${shade(c,-12)}, ${c} 40%, ${shade(c,10)})`;
+    s.textContent = hidden ? '?' : (settings.symbols ? SYMBOLS[t[j]] : '');
+    glass.appendChild(s);
+  }
+  el.append(glass, rim);
+  return el;
+}
+function shade(hex, pct) {
+  const n = parseInt(hex.slice(1), 16), f = (v) => Math.max(0, Math.min(255, Math.round(v + 255 * pct / 100)));
+  return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+}
+
+function updateHud() {
+  const daily = G.id === 'daily';
+  $('lvlTitle').textContent = daily ? 'Daily challenge' : `Level ${G.id}`;
+  const tags = [];
+  if (G.hidden) tags.push(['Mystery', 1]);
+  if (G.tight) tags.push(['Tight', 1]);
+  if (G.moveLimit) tags.push(['Limited', 1]);
+  tags.push([`${G.colors} colors · ${G.cap} deep`, 0]);
+  $('tags').innerHTML = tags.map(([t, h]) => `<span class="tag${h ? ' hot' : ''}">${t}</span>`).join('');
+  $('statMoves').innerHTML = G.moveLimit ? `Moves <b>${G.moves}/${G.moveLimit}</b>` : `Moves <b>${G.moves}</b>`;
+  $('statMoves').className = G.moveLimit && G.moveLimit - G.moves <= 5 ? 'warn' : '';
+  $('statPar').innerHTML = `Par <b>${G.par}</b>`;
+  $('statUndo').innerHTML = `Undos <b>${G.undoLimit < 0 ? '∞' : G.undoLimit - G.undosUsed}</b>`;
+  $('btnUndo').disabled = !G.history.length || (G.undoLimit >= 0 && G.undosUsed >= G.undoLimit);
+  $('btnHint').disabled = G.hints <= 0 || G.won;
+  $('hintLbl').textContent = `Hint (${G.hints})`;
+  $('btnTube').disabled = G.extraUsed || G.won;
+}
+
+// ---------- interaction ----------
+$('board').addEventListener('pointerdown', (e) => {
+  const el = e.target.closest('.tube'); if (!el || busy || !G || G.won) return;
+  const i = +el.dataset.i;
+  clearHint();
+  if (sel < 0) {
+    if (!G.tubes[i].length || Core.isComplete(G.tubes[i], G.cap)) { shake(el); return; }
+    sel = i; el.classList.add('lift'); sfx.pick(); return;
+  }
+  if (sel === i) { el.classList.remove('lift'); sel = -1; return; }
+  const k = Core.canPour(G.tubes, sel, i, G.cap);
+  if (!k) {
+    // switch selection if tapping another pourable tube
+    const prev = document.querySelector(`.tube[data-i="${sel}"]`);
+    if (G.tubes[i].length && !Core.isComplete(G.tubes[i], G.cap)) {
+      prev && prev.classList.remove('lift'); sel = i; el.classList.add('lift'); sfx.pick();
+    } else { shake(el); sfx.bad(); }
+    return;
+  }
+  doPour(sel, i);
+});
+
+function shake(el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+
+function doPour(from, to) {
+  busy = true;
+  const src = document.querySelector(`.tube[data-i="${from}"]`), dst = document.querySelector(`.tube[data-i="${to}"]`);
+  const a = src.getBoundingClientRect(), b = dst.getBoundingClientRect();
+  const dir = b.left >= a.left ? 1 : -1;
+  const dx = b.left - a.left - dir * a.width * .55, dy = b.top - a.top - a.height * .55;
+  const dur = settings.fast ? 160 : 280;
+  src.style.zIndex = 5;
+  const anim = src.animate([
+    { transform: 'translate(0,-18px) rotate(0deg)' },
+    { transform: `translate(${dx}px,${dy}px) rotate(${dir * 62}deg)` },
+  ], { duration: dur, easing: 'ease-in-out', fill: 'forwards' });
+  sfx.pour();
+  anim.onfinish = () => {
+    applyMove(from, to);
+    setTimeout(() => { sel = -1; busy = false; render(); afterMove(to); }, settings.fast ? 60 : 140);
+  };
+}
+
+function applyMove(from, to) {
+  G.history.push({ tubes: G.tubes.map((t) => t.slice()), revealed: G.revealed.map((r) => r.slice()) });
+  if (G.history.length > 200) G.history.shift();
+  const k = Core.pour(G.tubes, from, to, G.cap);
+  const moved = G.revealed[from].splice(G.revealed[from].length - k, k);
+  G.revealed[to].push(...moved.map(() => true));
+  G.justRevealed = {};
+  const rf = G.revealed[from];
+  if (rf.length && !rf[rf.length - 1]) { rf[rf.length - 1] = true; G.justRevealed[from] = rf.length - 1; }
+  G.moves++;
+}
+
+function afterMove(to) {
+  G.justRevealed = null;
+  if (Core.isComplete(G.tubes[to], G.cap)) sfx.done();
+  if (Core.isSolved(G.tubes, G.cap)) return win();
+  if (G.moveLimit && G.moves >= G.moveLimit) { save(); return $('ovLose').classList.add('show'); }
+  if (!hasMoves()) toast('No moves left. Undo or restart.');
+  save();
+}
+function hasMoves() {
+  for (let i = 0; i < G.tubes.length; i++) for (let j = 0; j < G.tubes.length; j++) if (Core.canPour(G.tubes, i, j, G.cap)) return true;
+  return false;
+}
+
+function undo() {
+  if (!G.history.length || busy) return;
+  if (G.undoLimit >= 0 && G.undosUsed >= G.undoLimit) return toast('No undos left on this level');
+  const h = G.history.pop();
+  G.tubes = h.tubes; G.revealed = h.revealed; G.moves = Math.max(0, G.moves - 1); G.undosUsed++;
+  sel = -1; save(); render();
+}
+
+function starsFor() {
+  if (G.assisted) return Math.min(2, G.moves <= G.par ? 2 : 1);
+  return G.moves <= G.par ? 3 : G.moves <= Math.ceil(G.par * 1.3) ? 2 : 1;
+}
+
+function win() {
+  G.won = true;
+  const s = starsFor();
+  if (G.id === 'daily') progress.daily[G.date] = Math.max(progress.daily[G.date] || 0, s);
+  else {
+    progress.stars[G.id] = Math.max(progress.stars[G.id] || 0, s);
+    progress.unlocked = Math.max(progress.unlocked, G.id + 1);
+  }
+  store.set('current', null); store.set('progress', progress);
+  sfx.win(); confetti();
+  const words = ['Nicely done', 'Lovely!', 'Beautiful!', 'Brilliant!', 'Flawless!'];
+  $('winTitle').textContent = s === 3 ? words[Math.floor(Math.random() * 3) + 2] : words[s - 1];
+  $('winSub').textContent = G.id === 'daily' ? 'Daily challenge complete' : `Level ${G.id} complete`;
+  $('winStars').innerHTML = [1, 2, 3].map((k) => `<span class="${k <= s ? '' : 'off'}">★</span>`).join('');
+  $('winText').textContent = `${G.moves} moves · par ${G.par}` + (G.assisted ? ' · used help' : '');
+  $('btnNext').textContent = G.id === 'daily' ? 'Back to journey' : 'Next level';
+  $('btnReplay').style.display = s < 3 ? '' : 'none';
+  setTimeout(() => $('ovWin').classList.add('show'), 700);
+}
+
+// ---------- tools ----------
+let hintTimer = null;
+function clearHint() { document.querySelectorAll('.hint,.hintTo').forEach((e) => e.classList.remove('hint', 'hintTo')); }
+function hint() {
+  if (G.hints <= 0 || busy) return;
+  const sol = Core.solve(G.tubes, G.cap, 200000);
+  if (!sol) return toast('No solution from here. Try undoing a few moves.');
+  if (!sol.length) return;
+  G.hints--; G.assisted = true; save(); updateHud();
+  if (sel >= 0) { document.querySelector(`.tube[data-i="${sel}"]`)?.classList.remove('lift'); sel = -1; }
+  const [f, t] = sol[0];
+  document.querySelector(`.tube[data-i="${f}"]`)?.classList.add('hint');
+  document.querySelector(`.tube[data-i="${t}"]`)?.classList.add('hintTo');
+  clearTimeout(hintTimer); hintTimer = setTimeout(clearHint, 2500);
+}
+function extraTube() {
+  if (G.extraUsed || busy) return;
+  G.extraUsed = true; G.assisted = true;
+  G.tubes.push([]); G.revealed.push([]);
+  G.history.forEach((h) => { h.tubes.push([]); h.revealed.push([]); });
+  save(); render(); toast('Added one empty tube');
+}
+function restart() {
+  if (busy) return;
+  G.tubes = G.initial.map((t) => t.slice());
+  while (G.tubes.length < G.revealed.length) G.tubes.push([]);
+  G.revealed = G.tubes.map((t) => t.map((_, i) => !G.hidden || i === t.length - 1));
+  G.history = []; G.moves = 0; G.undosUsed = 0; G.won = false;
+  sel = -1; save(); render();
+}
+
+// ---------- menus ----------
+function openLevels() {
+  levelPage = Math.floor((Math.min(progress.unlocked, 9999) - 1) / 25);
+  drawLevels(); $('ovLevels').classList.add('show');
+}
+function drawLevels() {
+  const start = levelPage * 25 + 1, g = $('lvlGrid'); g.innerHTML = '';
+  for (let n = start; n < start + 25; n++) {
+    const b = document.createElement('button'); b.className = 'lvl' + (G && G.id === n ? ' cur' : '');
+    const s = progress.stars[n] || 0;
+    b.innerHTML = `${n}<small>${'★'.repeat(s)}</small>`;
+    b.disabled = n > progress.unlocked;
+    b.onclick = () => { close(); startLevel(n, false); };
+    g.appendChild(b);
+  }
+  $('pgPrev').disabled = levelPage === 0;
+  $('pgNext').disabled = start + 25 > progress.unlocked;
+  const d = progress.daily[today()];
+  $('btnDaily').textContent = d ? `☀︎ Daily challenge ${'★'.repeat(d)}` : '☀︎ Daily challenge';
+}
+function close() { document.querySelectorAll('.overlay').forEach((o) => o.classList.remove('show')); }
+document.querySelectorAll('[data-close]').forEach((b) => b.onclick = close);
+document.querySelectorAll('.overlay').forEach((o) => o.addEventListener('click', (e) => { if (e.target === o && o.id !== 'ovWin' && o.id !== 'ovLose') close(); }));
+
+function drawSettings() {
+  document.querySelectorAll('[data-set]').forEach((b) => b.classList.toggle('on', !!settings[b.dataset.set]));
+}
+document.querySelectorAll('[data-set]').forEach((b) => b.onclick = () => {
+  const k = b.dataset.set; settings[k] = !settings[k]; store.set('settings', settings); drawSettings();
+  if (k === 'symbols') render();
+  if (k === 'expert') toast(settings[k] ? 'Expert mode applies from the next level' : 'Expert mode off from the next level');
+});
+
+$('btnUndo').onclick = undo;
+$('btnRestart').onclick = restart;
+$('btnHint').onclick = hint;
+$('btnTube').onclick = extraTube;
+$('btnMenu').onclick = openLevels;
+$('btnSettings').onclick = () => { drawSettings(); $('ovSettings').classList.add('show'); };
+$('btnHow').onclick = () => { close(); $('ovHow').classList.add('show'); };
+$('btnReset').onclick = () => {
+  const b = $('btnReset');
+  if (b.dataset.armed) { progress = { unlocked: 1, stars: {}, daily: {} }; store.set('progress', progress); store.set('current', null); delete b.dataset.armed; b.textContent = 'Reset progress'; close(); startLevel(1); return; }
+  b.dataset.armed = 1; b.textContent = 'Tap again to erase all progress';
+  setTimeout(() => { delete b.dataset.armed; b.textContent = 'Reset progress'; }, 3000);
+};
+$('btnDaily').onclick = () => { close(); startLevel('daily', true); };
+$('pgPrev').onclick = () => { levelPage--; drawLevels(); };
+$('pgNext').onclick = () => { levelPage++; drawLevels(); };
+$('btnNext').onclick = () => { close(); startLevel(G.id === 'daily' ? progress.unlocked : G.id + 1); };
+$('btnReplay').onclick = () => { close(); startLevel(G.id, false); };
+$('btnRetry').onclick = () => { close(); restart(); };
+$('btnLoseUndo').onclick = () => { close(); undo(); };
+
+let tt = null;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2200); }
+
+// ---------- confetti ----------
+function confetti() {
+  const c = $('confetti'), ctx = c.getContext('2d'), dpr = devicePixelRatio || 1;
+  c.width = innerWidth * dpr; c.height = innerHeight * dpr; ctx.scale(dpr, dpr);
+  const parts = Array.from({ length: 140 }, () => ({
+    x: innerWidth / 2, y: innerHeight * .45, vx: (Math.random() - .5) * 12, vy: -Math.random() * 12 - 4,
+    s: 4 + Math.random() * 6, c: COLORS[Math.floor(Math.random() * COLORS.length)], r: Math.random() * 6, vr: (Math.random() - .5) * .4,
+  }));
+  let f = 0;
+  (function step() {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    parts.forEach((p) => { p.vy += .32; p.x += p.vx; p.y += p.vy; p.vx *= .99; p.r += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); ctx.restore(); });
+    if (++f < 150) requestAnimationFrame(step); else ctx.clearRect(0, 0, innerWidth, innerHeight);
+  })();
+}
+
+addEventListener('resize', () => { if (G) render(); });
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('touchmove', (e) => { if (!e.target.closest('.card')) e.preventDefault(); }, { passive: false });
+
+// ---------- boot ----------
+const cur = store.get('current', null);
+if (cur && cur.id) startLevel(cur.id === 'daily' && cur.date !== today() ? progress.unlocked : cur.id, true);
+else startLevel(progress.unlocked);
+if (!store.get('seenHow', false)) { store.set('seenHow', true); setTimeout(() => $('ovHow').classList.add('show'), 400); }
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
