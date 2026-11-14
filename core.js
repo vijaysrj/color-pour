@@ -13,8 +13,22 @@
     };
   }
 
-  // Difficulty curve for Journey levels.
-  function levelConfig(n) {
+  // Difficulty curves for Journey levels.
+  function easyConfig(n) {
+    const colors = Math.min(9, 4 + Math.floor((n - 1) / 6));
+    return { n, colors, capacity: 4, empties: 2, hidden: false, moveLimit: false, undoLimit: Infinity, seedOffset: 1 };
+  }
+  function mediumConfig(n) {
+    const colors = Math.min(12, 5 + Math.floor((n - 1) / 6));
+    const capacity = n >= 40 ? 5 : 4;
+    const empties = n >= 20 && n % 4 === 0 && capacity === 4 ? 1 : 2;
+    const hidden = n >= 25 && n % 3 === 0;
+    const undoLimit = n >= 30 ? 10 : Infinity;
+    return { n, colors, capacity, empties, hidden, moveLimit: false, undoLimit, seedOffset: 2 };
+  }
+  function levelConfig(n, diff) {
+    if (diff === 'easy') return easyConfig(n);
+    if (diff === 'medium') return mediumConfig(n);
     const colors = Math.min(14, 5 + Math.floor((n - 1) / 5));
     let capacity = 4;
     if (n >= 26) capacity = 5;
@@ -133,7 +147,7 @@
   }
 
   function generate(cfg, seedBase) {
-    const base = seedBase != null ? seedBase : cfg.n * 7919 + 13;
+    const base = seedBase != null ? seedBase : cfg.n * 7919 + 13 + (cfg.seedOffset || 0) * 1000003;
     let { colors, capacity, empties } = cfg;
     for (let attempt = 0; attempt < 60; attempt++) {
       if (attempt === 40) empties++; // safety valve

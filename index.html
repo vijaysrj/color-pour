@@ -98,6 +98,12 @@ footer { display: flex; justify-content: center; gap: 10px; }
   background: rgba(0,0,0,.75); padding: 10px 16px; border-radius: 99px; font-size: 14px; transition: .25s; pointer-events: none; z-index: 20; white-space: nowrap; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .loading { color: var(--muted); font-size: 15px; }
+.diff { display: block; width: 100%; text-align: left; border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 14px 16px; margin-top: 10px;
+  background: rgba(255,255,255,.08); color: var(--ink); cursor: pointer; font: inherit; }
+.diff b { display: block; font-size: 18px; }
+.diff span { display: block; color: var(--muted); font-size: 13px; margin-top: 3px; line-height: 1.35; }
+.diff small { display: block; color: var(--accent); font-size: 12px; margin-top: 6px; }
+.diff.cur { border-color: var(--accent); }
 canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
 </style>
 </head>
@@ -143,6 +149,7 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
 
 <div class="overlay" id="ovLevels"><div class="card">
   <h2>Levels</h2>
+  <button class="btn ghost" id="btnDiff">Difficulty</button>
   <button class="btn" id="btnDaily">☀︎ Daily challenge</button>
   <div class="grid" id="lvlGrid"></div>
   <div style="display:flex;gap:8px">
@@ -160,6 +167,7 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
   <div class="setting"><span>Quick pour<small>Shorter pour animation.</small></span><button class="switch" data-set="fast"></button></div>
   <p style="font-size:13px;margin-top:16px">To install: open in Safari, tap Share, then “Add to Home Screen”.</p>
   <button class="btn ghost" id="btnHow">How to play</button>
+  <button class="btn ghost" id="btnDiff2">Change difficulty</button>
   <button class="btn ghost" id="btnSync">Move progress to another browser</button>
   <button class="btn ghost" id="btnReset">Reset progress</button>
   <button class="btn" data-close>Done</button>
@@ -173,6 +181,14 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
   <button class="btn" id="btnCopyCode">Copy my code</button>
   <button class="btn ghost" id="btnLoadCode">Load the code above</button>
   <button class="btn ghost" data-close>Close</button>
+</div></div>
+
+<div class="overlay" id="ovDiff"><div class="card">
+  <h2>Choose your challenge</h2>
+  <p>Each one keeps its own levels and stars. You can switch any time from the Levels menu.</p>
+  <button class="diff" data-diff="easy"><b>Easy</b><span>Up to 9 colors, two spare tubes, unlimited undo. Relaxing.</span><small class="prog"></small></button>
+  <button class="diff" data-diff="medium"><b>Medium</b><span>Up to 12 colors, deeper tubes later, some hidden layers.</span><small class="prog"></small></button>
+  <button class="diff" data-diff="hard"><b>Hard</b><span>Up to 14 colors, hidden layers, one spare tube, move and undo limits.</span><small class="prog"></small></button>
 </div></div>
 
 <div class="overlay" id="ovHow"><div class="card" style="text-align:left">
@@ -200,7 +216,14 @@ const store = {
   set(k, v) { try { localStorage.setItem('cp_' + k, JSON.stringify(v)); } catch {} },
 };
 const settings = Object.assign({ sound: true, symbols: false, expert: false, fast: false }, store.get('settings', {}));
-let progress = Object.assign({ unlocked: 1, stars: {}, daily: {} }, store.get('progress', {}));
+// Each difficulty keeps its own save. Hard uses the original keys, so earlier progress stays on Hard.
+const DIFFS = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+const keyP = (d) => d === 'hard' ? 'progress' : 'progress_' + d;
+const keyC = (d) => d === 'hard' ? 'current' : 'current_' + d;
+const loadProgress = (d) => Object.assign({ unlocked: 1, stars: {} }, store.get(keyP(d), {}));
+let diff = DIFFS[settings.diff] ? settings.diff : 'hard';
+let progress = loadProgress(diff);
+let dailyStars = Object.assign({}, progress.daily || {}, store.get('daily', {}));
 let G = null; // current game
 let sel = -1, busy = false, levelPage = 0;
 
@@ -231,10 +254,10 @@ function startLevel(id, resume) {
   sel = -1; busy = false;
   $('board').innerHTML = '<div class="loading">Mixing colors…</div>';
   setTimeout(() => {
-    const saved = resume ? store.get('current', null) : null;
+    const saved = resume ? store.get(keyC(diff), null) : null;
     if (saved && saved.id === id && (id !== 'daily' || saved.date === today())) { G = saved; render(); return; }
     const daily = id === 'daily';
-    const cfg = daily ? Core.dailyConfig(today()) : Core.levelConfig(id);
+    const cfg = daily ? Core.dailyConfig(today()) : Core.levelConfig(id, diff);
     if (settings.expert) { cfg.hidden = true; }
     const gen = Core.generate(cfg, daily ? cfg.seedBase : undefined);
     G = {
@@ -249,7 +272,7 @@ function startLevel(id, resume) {
     save(); render();
   }, 30);
 }
-function save() { store.set('current', G); store.set('progress', progress); }
+function save() { store.set(keyC(diff), G); store.set(keyP(diff), progress); }
 
 // ---------- layout & render ----------
 function layout() {
@@ -316,7 +339,7 @@ function shade(hex, pct) {
 function updateHud() {
   const daily = G.id === 'daily';
   $('lvlTitle').textContent = daily ? 'Daily challenge' : `Level ${G.id}`;
-  const tags = [];
+  const tags = [[DIFFS[diff], 0]];
   if (G.hidden) tags.push(['Mystery', 1]);
   if (G.tight) tags.push(['Tight', 1]);
   if (G.moveLimit) tags.push(['Limited', 1]);
@@ -416,12 +439,12 @@ function starsFor() {
 function win() {
   G.won = true;
   const s = starsFor();
-  if (G.id === 'daily') progress.daily[G.date] = Math.max(progress.daily[G.date] || 0, s);
+  if (G.id === 'daily') { dailyStars[G.date] = Math.max(dailyStars[G.date] || 0, s); store.set('daily', dailyStars); }
   else {
     progress.stars[G.id] = Math.max(progress.stars[G.id] || 0, s);
     progress.unlocked = Math.max(progress.unlocked, G.id + 1);
   }
-  store.set('current', null); store.set('progress', progress);
+  store.set(keyC(diff), null); store.set(keyP(diff), progress);
   sfx.win(); confetti();
   const words = ['Nicely done', 'Lovely!', 'Beautiful!', 'Brilliant!', 'Flawless!'];
   $('winTitle').textContent = s === 3 ? words[Math.floor(Math.random() * 3) + 2] : words[s - 1];
@@ -481,7 +504,8 @@ function drawLevels() {
   }
   $('pgPrev').disabled = levelPage === 0;
   $('pgNext').disabled = start + 25 > progress.unlocked;
-  const d = progress.daily[today()];
+  const d = dailyStars[today()];
+  $('btnDiff').textContent = `Difficulty: ${DIFFS[diff]} · change`;
   $('btnDaily').textContent = d ? `☀︎ Daily challenge ${'★'.repeat(d)}` : '☀︎ Daily challenge';
 }
 function close() { document.querySelectorAll('.overlay').forEach((o) => o.classList.remove('show')); }
@@ -507,19 +531,20 @@ $('btnHow').onclick = () => { close(); $('ovHow').classList.add('show'); };
 // ---------- progress code (move between Safari and the Home Screen app) ----------
 function progressCode() {
   const stars = []; for (let n = 1; n < progress.unlocked; n++) stars.push(progress.stars[n] || 0);
-  return 'CP1-' + progress.unlocked.toString(36) + '-' + stars.join('');
+  return (diff === 'hard' ? 'CP1-' : 'CP2' + diff[0] + '-') + progress.unlocked.toString(36) + '-' + stars.join('');
 }
 function readCode(code) {
-  const m = /^CP1-([0-9a-z]+)-([0-3]*)$/i.exec(code.trim().replace(/\s+/g, ''));
+  const m = /^CP(1|2[em])-([0-9a-z]+)-([0-3]*)$/i.exec(code.trim().replace(/\s+/g, ''));
   if (!m) return null;
-  const unlocked = parseInt(m[1], 36);
+  const d = m[1] === '1' ? 'hard' : m[1].toLowerCase() === '2e' ? 'easy' : 'medium';
+  const unlocked = parseInt(m[2], 36);
   if (!(unlocked >= 1 && unlocked < 100000)) return null;
-  const stars = {}; [...m[2]].forEach((c, i) => { if (+c) stars[i + 1] = +c; });
-  return { unlocked, stars };
+  const stars = {}; [...m[3]].forEach((c, i) => { if (+c) stars[i + 1] = +c; });
+  return { diff: d, unlocked, stars };
 }
 $('btnSync').onclick = () => {
   close();
-  $('syncSummary').textContent = `You're on level ${progress.unlocked}, with ${Object.values(progress.stars).reduce((a, b) => a + b, 0)} stars.`;
+  $('syncSummary').textContent = `${DIFFS[diff]}: you're on level ${progress.unlocked}, with ${Object.values(progress.stars).reduce((a, b) => a + b, 0)} stars.`;
   $('syncCode').value = progressCode();
   $('ovSync').classList.add('show');
 };
@@ -531,16 +556,17 @@ $('btnCopyCode').onclick = async () => {
 $('btnLoadCode').onclick = () => {
   const d = readCode($('syncCode').value);
   if (!d) return toast('That code doesn\'t look right');
+  setDiff(d.diff, false);
   progress.unlocked = Math.max(progress.unlocked, d.unlocked);
   for (const [n, v] of Object.entries(d.stars)) progress.stars[n] = Math.max(progress.stars[n] || 0, v);
-  store.set('progress', progress); store.set('current', null);
-  close(); toast(`Progress loaded: level ${progress.unlocked}`); startLevel(progress.unlocked);
+  store.set(keyP(diff), progress); store.set(keyC(diff), null);
+  close(); toast(`${DIFFS[diff]} progress loaded: level ${progress.unlocked}`); startLevel(progress.unlocked);
 };
 
 $('btnReset').onclick = () => {
   const b = $('btnReset');
-  if (b.dataset.armed) { progress = { unlocked: 1, stars: {}, daily: {} }; store.set('progress', progress); store.set('current', null); delete b.dataset.armed; b.textContent = 'Reset progress'; close(); startLevel(1); return; }
-  b.dataset.armed = 1; b.textContent = 'Tap again to erase all progress';
+  if (b.dataset.armed) { progress = { unlocked: 1, stars: {} }; store.set(keyP(diff), progress); store.set(keyC(diff), null); delete b.dataset.armed; b.textContent = 'Reset progress'; close(); startLevel(1); return; }
+  b.dataset.armed = 1; b.textContent = `Tap again to erase ${DIFFS[diff]} progress`;
   setTimeout(() => { delete b.dataset.armed; b.textContent = 'Reset progress'; }, 3000);
 };
 $('btnDaily').onclick = () => { close(); startLevel('daily', true); };
@@ -576,10 +602,36 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('touchmove', (e) => { if (!e.target.closest('.card')) e.preventDefault(); }, { passive: false });
 
 // ---------- boot ----------
-const cur = store.get('current', null);
-if (cur && cur.id) startLevel(cur.id === 'daily' && cur.date !== today() ? progress.unlocked : cur.id, true);
-else startLevel(progress.unlocked);
-if (!store.get('seenHow', false)) { store.set('seenHow', true); setTimeout(() => $('ovHow').classList.add('show'), 400); }
+// ---------- difficulty ----------
+function resumeCurrent() {
+  const cur = store.get(keyC(diff), null);
+  if (cur && cur.id) startLevel(cur.id === 'daily' && cur.date !== today() ? progress.unlocked : cur.id, true);
+  else startLevel(progress.unlocked);
+}
+function setDiff(d, go = true) {
+  if (G && !G.won) save();
+  diff = d; settings.diff = d; store.set('settings', settings);
+  progress = loadProgress(d);
+  if (go) resumeCurrent();
+}
+function openDiff() {
+  document.querySelectorAll('[data-diff]').forEach((b) => {
+    const d = b.dataset.diff, p = loadProgress(d);
+    b.classList.toggle('cur', settings.diff === d);
+    b.querySelector('.prog').textContent = p.unlocked > 1 ? `You're on level ${p.unlocked}` : 'Not started';
+  });
+  $('ovDiff').classList.add('show');
+}
+document.querySelectorAll('[data-diff]').forEach((b) => b.onclick = () => {
+  close(); setDiff(b.dataset.diff);
+  if (!store.get('seenHow', false)) { store.set('seenHow', true); setTimeout(() => $('ovHow').classList.add('show'), 300); }
+});
+$('btnDiff').onclick = () => { close(); openDiff(); };
+$('btnDiff2').onclick = () => { close(); openDiff(); };
+
+// ---------- boot ----------
+resumeCurrent();
+if (!settings.diff) setTimeout(openDiff, 200);
 
 // Ask the browser to keep our saved data even when the phone is low on space.
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
