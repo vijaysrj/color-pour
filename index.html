@@ -160,8 +160,19 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
   <div class="setting"><span>Quick pour<small>Shorter pour animation.</small></span><button class="switch" data-set="fast"></button></div>
   <p style="font-size:13px;margin-top:16px">To install: open in Safari, tap Share, then “Add to Home Screen”.</p>
   <button class="btn ghost" id="btnHow">How to play</button>
+  <button class="btn ghost" id="btnSync">Move progress to another browser</button>
   <button class="btn ghost" id="btnReset">Reset progress</button>
   <button class="btn" data-close>Done</button>
+</div></div>
+
+<div class="overlay" id="ovSync"><div class="card">
+  <h2>Your progress</h2>
+  <p id="syncSummary"></p>
+  <p style="font-size:13px">Progress is saved on this phone automatically. Safari and the Home Screen app keep separate saves, so use this code to carry progress from one to the other.</p>
+  <textarea id="syncCode" rows="3" style="width:100%;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.25);color:var(--ink);padding:10px;font:14px ui-monospace,Menlo,monospace;user-select:text;-webkit-user-select:text;resize:none"></textarea>
+  <button class="btn" id="btnCopyCode">Copy my code</button>
+  <button class="btn ghost" id="btnLoadCode">Load the code above</button>
+  <button class="btn ghost" data-close>Close</button>
 </div></div>
 
 <div class="overlay" id="ovHow"><div class="card" style="text-align:left">
@@ -493,6 +504,39 @@ $('btnTube').onclick = extraTube;
 $('btnMenu').onclick = openLevels;
 $('btnSettings').onclick = () => { drawSettings(); $('ovSettings').classList.add('show'); };
 $('btnHow').onclick = () => { close(); $('ovHow').classList.add('show'); };
+// ---------- progress code (move between Safari and the Home Screen app) ----------
+function progressCode() {
+  const stars = []; for (let n = 1; n < progress.unlocked; n++) stars.push(progress.stars[n] || 0);
+  return 'CP1-' + progress.unlocked.toString(36) + '-' + stars.join('');
+}
+function readCode(code) {
+  const m = /^CP1-([0-9a-z]+)-([0-3]*)$/i.exec(code.trim().replace(/\s+/g, ''));
+  if (!m) return null;
+  const unlocked = parseInt(m[1], 36);
+  if (!(unlocked >= 1 && unlocked < 100000)) return null;
+  const stars = {}; [...m[2]].forEach((c, i) => { if (+c) stars[i + 1] = +c; });
+  return { unlocked, stars };
+}
+$('btnSync').onclick = () => {
+  close();
+  $('syncSummary').textContent = `You're on level ${progress.unlocked}, with ${Object.values(progress.stars).reduce((a, b) => a + b, 0)} stars.`;
+  $('syncCode').value = progressCode();
+  $('ovSync').classList.add('show');
+};
+$('btnCopyCode').onclick = async () => {
+  const code = progressCode(); $('syncCode').value = code;
+  try { await navigator.clipboard.writeText(code); toast('Code copied'); }
+  catch { $('syncCode').select(); toast('Select the code and copy it'); }
+};
+$('btnLoadCode').onclick = () => {
+  const d = readCode($('syncCode').value);
+  if (!d) return toast('That code doesn\'t look right');
+  progress.unlocked = Math.max(progress.unlocked, d.unlocked);
+  for (const [n, v] of Object.entries(d.stars)) progress.stars[n] = Math.max(progress.stars[n] || 0, v);
+  store.set('progress', progress); store.set('current', null);
+  close(); toast(`Progress loaded: level ${progress.unlocked}`); startLevel(progress.unlocked);
+};
+
 $('btnReset').onclick = () => {
   const b = $('btnReset');
   if (b.dataset.armed) { progress = { unlocked: 1, stars: {}, daily: {} }; store.set('progress', progress); store.set('current', null); delete b.dataset.armed; b.textContent = 'Reset progress'; close(); startLevel(1); return; }
@@ -536,6 +580,9 @@ const cur = store.get('current', null);
 if (cur && cur.id) startLevel(cur.id === 'daily' && cur.date !== today() ? progress.unlocked : cur.id, true);
 else startLevel(progress.unlocked);
 if (!store.get('seenHow', false)) { store.set('seenHow', true); setTimeout(() => $('ovHow').classList.add('show'), 400); }
+
+// Ask the browser to keep our saved data even when the phone is low on space.
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
