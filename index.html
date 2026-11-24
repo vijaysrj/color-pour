@@ -93,7 +93,13 @@ footer { display: flex; justify-content: center; gap: 10px; }
 .lvl { aspect-ratio: 1; border-radius: 12px; border: 0; background: rgba(255,255,255,.1); color: var(--ink); font-weight: 600; font-size: 15px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .lvl small { font-size: 9px; color: var(--accent); letter-spacing: 1px; }
 .lvl.cur { outline: 2px solid var(--accent); }
+.lvl.ahead { background: rgba(255,255,255,.04); color: var(--muted); }
 .lvl:disabled { opacity: .3; }
+.jump { display: flex; gap: 8px; margin: 12px 0 4px; }
+.jump input { flex: 1; min-width: 0; border-radius: 14px; border: 1px solid rgba(255,255,255,.2); background: rgba(0,0,0,.25); color: var(--ink);
+  padding: 0 14px; font-family: inherit; font-size: 16px; font-weight: 600; user-select: text; -webkit-user-select: text; }
+.jump .btn { width: auto; margin: 0; padding: 12px 20px; }
+.lvlnote { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
 .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 96px); transform: translateX(-50%) translateY(20px); opacity: 0;
   background: rgba(0,0,0,.75); padding: 10px 16px; border-radius: 99px; font-size: 14px; transition: .25s; pointer-events: none; z-index: 20; white-space: nowrap; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -151,6 +157,11 @@ canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
   <h2>Levels</h2>
   <button class="btn ghost" id="btnDiff">Difficulty</button>
   <button class="btn" id="btnDaily">☀︎ Daily challenge</button>
+  <form class="jump" id="jumpForm" novalidate>
+    <input id="jumpInput" type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="999" placeholder="Go to level…" aria-label="Level number">
+    <button class="btn" type="submit">Go</button>
+  </form>
+  <div class="lvlnote" id="lvlNote"></div>
   <div class="grid" id="lvlGrid"></div>
   <div style="display:flex;gap:8px">
     <button class="btn ghost" id="pgPrev">‹</button>
@@ -488,22 +499,26 @@ function restart() {
 }
 
 // ---------- menus ----------
+const MAX_LEVEL = 999;
 function openLevels() {
-  levelPage = Math.floor((Math.min(progress.unlocked, 9999) - 1) / 25);
+  levelPage = Math.floor((Math.min(progress.unlocked, MAX_LEVEL) - 1) / 25);
+  $('jumpInput').value = '';
   drawLevels(); $('ovLevels').classList.add('show');
 }
 function drawLevels() {
   const start = levelPage * 25 + 1, g = $('lvlGrid'); g.innerHTML = '';
   for (let n = start; n < start + 25; n++) {
-    const b = document.createElement('button'); b.className = 'lvl' + (G && G.id === n ? ' cur' : '');
+    if (n > MAX_LEVEL) break;
+    const b = document.createElement('button');
+    b.className = 'lvl' + (G && G.id === n ? ' cur' : '') + (n > progress.unlocked ? ' ahead' : '');
     const s = progress.stars[n] || 0;
     b.innerHTML = `${n}<small>${'★'.repeat(s)}</small>`;
-    b.disabled = n > progress.unlocked;
     b.onclick = () => { close(); startLevel(n, false); };
     g.appendChild(b);
   }
   $('pgPrev').disabled = levelPage === 0;
-  $('pgNext').disabled = start + 25 > progress.unlocked;
+  $('pgNext').disabled = start + 25 > MAX_LEVEL;
+  $('lvlNote').textContent = `${DIFFS[diff]} levels ${start}–${Math.min(start + 24, MAX_LEVEL)} · you're up to level ${progress.unlocked}`;
   const d = dailyStars[today()];
   $('btnDiff').textContent = `Difficulty: ${DIFFS[diff]} · change`;
   $('btnDaily').textContent = d ? `☀︎ Daily challenge ${'★'.repeat(d)}` : '☀︎ Daily challenge';
@@ -570,6 +585,12 @@ $('btnReset').onclick = () => {
   setTimeout(() => { delete b.dataset.armed; b.textContent = 'Reset progress'; }, 3000);
 };
 $('btnDaily').onclick = () => { close(); startLevel('daily', true); };
+$('jumpForm').onsubmit = (e) => {
+  e.preventDefault();
+  const n = parseInt($('jumpInput').value, 10);
+  if (!(n >= 1 && n <= MAX_LEVEL)) return toast(`Pick a level from 1 to ${MAX_LEVEL}`);
+  $('jumpInput').blur(); close(); startLevel(n, false);
+};
 $('pgPrev').onclick = () => { levelPage--; drawLevels(); };
 $('pgNext').onclick = () => { levelPage++; drawLevels(); };
 $('btnNext').onclick = () => { close(); startLevel(G.id === 'daily' ? progress.unlocked : G.id + 1); };
